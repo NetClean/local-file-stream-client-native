@@ -1,0 +1,4 @@
+name                lfsc
+target_platform     mingw32
+sourcedir           ../src .
+cflags              std=c99 Wall I../include

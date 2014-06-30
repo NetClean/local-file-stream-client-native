@@ -324,9 +324,6 @@ size_t lfsc_fwrite(const void *ptr, size_t size, size_t nmemb, lfsc_file* stream
 	uint32_t tot_size = size * nmemb;
 	LFSC_TRY( lfsc_write_int(stream->ctx->pipe, &tot_size, sizeof(tot_size)), 0 ); 
 
-	lfsc_status s = lfsc_check_status(stream->ctx->pipe);
-	LFSC_TRY( s == LFSC_SOK, 0 );
-	
 	int written = 0;
 	BOOL success = TRUE;
 
@@ -335,6 +332,9 @@ size_t lfsc_fwrite(const void *ptr, size_t size, size_t nmemb, lfsc_file* stream
 		success = WriteFile(stream->ctx->pipe, buffer + written, tot_size - written, &br, NULL);
 		written += br;
 	}
+	
+	lfsc_status s = lfsc_check_status(stream->ctx->pipe);
+	LFSC_TRY( s == LFSC_SOK, 0 );
 
 	// adjust stream position to nearest member position
 	if((written % size) != 0){

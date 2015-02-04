@@ -1,6 +1,10 @@
 #ifndef LFSC_H
 #define LFSC_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <wchar.h>
 
 #define LFSC_WAIT_FOREVER -1
@@ -49,5 +53,9 @@ int lfsc_test(lfsc_ctx* ctx, wchar_t* out_str, int str_size);
 
 size_t lfsc_get_length(lfsc_file* stream);
 lfsc_status lfsc_get_flags(lfsc_file* stream, int* out_flags);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -43,8 +43,12 @@ lfsc_status lfsc_ctx_connect(lfsc_ctx* ctx, const wchar_t* name, int ms_timeout)
 lfsc_status lfsc_ctx_disconnect(lfsc_ctx* ctx);
 lfsc_status lfsc_ctx_fopen(lfsc_ctx* ctx, lfsc_file** out_file, const wchar_t* name);
 
+size_t lfsc_read(void *ptr, size_t size, lfsc_file* stream);
+size_t lfsc_write(const void *ptr, size_t size, lfsc_file* stream);
+
 size_t lfsc_fread(void *ptr, size_t size, size_t nmemb, lfsc_file* stream);
 size_t lfsc_fwrite(const void *ptr, size_t size, size_t nmemb, lfsc_file* stream);
+
 int lfsc_fseek(lfsc_file* stream, long offset, int whence);
 int lfsc_fflush(lfsc_file* stream);
 int lfsc_fclose(lfsc_file* stream); 

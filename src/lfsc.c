@@ -4,9 +4,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+
+#define dprintf(...)
 
 typedef enum {
 	LFSC_CDISCONNECT, LFSC_COPEN, LFSC_CCLOSE, LFSC_CREAD, LFSC_CWRITE, LFSC_CSEEK, 
@@ -54,6 +57,8 @@ static void lfsc_flip_int_copy(void* dst, const void* src, size_t size)
 // reads an LE int of arbitrary size from the pipe
 static bool lfsc_read_int(HANDLE pipe, void* out_v, int size)
 {
+	dprintf("  %s\n", __func__);
+
 	BOOL success;
 	DWORD br;
 
@@ -67,6 +72,17 @@ static bool lfsc_read_int(HANDLE pipe, void* out_v, int size)
 // writes an LE int of arbitrary size to the pipe
 static bool lfsc_write_int(HANDLE pipe, const void* v, int size)
 {
+	dprintf("  %s\n", __func__);
+
+	if(size == 2)
+		dprintf("  %d %d %04x\n", size, *(int16_t*)v, *(int16_t*)v);
+
+	if(size == 4)
+		dprintf("  %d %d %08x\n", size, *(int32_t*)v, *(int32_t*)v);
+	
+	if(size == 8)
+		dprintf("  %d %" PRId64 " %" PRIx64 "\n", size, *(int64_t*)v, *(int64_t*)v);
+
 	BOOL success;
 	DWORD br;
 
@@ -111,12 +127,17 @@ static lfsc_status lfsc_check_status(HANDLE* pipe)
 
 static bool lfsc_write_command(HANDLE pipe, uint64_t handle, lfsc_cmd cmd)
 {
+	dprintf("  %s %d\n", __func__, cmd);
+
+	dprintf("  magic\n");
 	if(!lfsc_write_int(pipe, &lfsc_magic, sizeof(lfsc_magic)))
 		return false;
 
+	dprintf("  cmd\n");
 	if(!lfsc_write_int(pipe, &cmd, sizeof(cmd)))
 		return false;
 	
+	dprintf("  handle\n");
 	if(!lfsc_write_int(pipe, &handle, sizeof(handle)))
 		return false;
 
@@ -127,8 +148,7 @@ static lfsc_status lfsc_local_seek(HANDLE pipe, uint64_t handle, int64_t offset,
 {
 	lfsc_status ret = LFSC_SERR_UNKNOWN;
 
-	LFSC_TRY( lfsc_write_command(pipe, handle, LFSC_CREAD), LFSC_SERR_WRITE_PIPE );
-	LFSC_TRY( lfsc_write_int(pipe, &offset, sizeof(offset)), LFSC_SERR_WRITE_PIPE );
+	LFSC_TRY( lfsc_write_command(pipe, handle, LFSC_CSEEK), LFSC_SERR_WRITE_PIPE );
 	LFSC_TRY( lfsc_write_int(pipe, &offset, sizeof(offset)), LFSC_SERR_WRITE_PIPE );
 	LFSC_TRY( lfsc_write_int(pipe, &whence, sizeof(whence)), LFSC_SERR_WRITE_PIPE );
 
@@ -143,6 +163,7 @@ error:
 
 lfsc_ctx* lfsc_ctx_create()
 {
+	dprintf("%s\n", __func__);
 	lfsc_ctx* ret = calloc(1, sizeof(lfsc_ctx));
 	ret->pipe = INVALID_HANDLE_VALUE;
 	ret->mutex = CreateMutex(NULL, FALSE, NULL);
@@ -151,6 +172,7 @@ lfsc_ctx* lfsc_ctx_create()
 
 void lfsc_ctx_destroy(lfsc_ctx* ctx)
 {
+	dprintf("%s\n", __func__);
 	if(ctx->pipe != INVALID_HANDLE_VALUE)
 		CloseHandle(ctx->pipe);
 
@@ -161,14 +183,16 @@ void lfsc_ctx_destroy(lfsc_ctx* ctx)
 
 lfsc_status lfsc_ctx_connect(lfsc_ctx* ctx, const wchar_t* name, int ms_timeout)
 {
+	dprintf("%s\n", __func__);
 	lfsc_status status = LFSC_SERR_UNKNOWN;
 
 	WaitForSingleObject(ctx->mutex, INFINITE);
 
 	if(!WaitNamedPipeW(name, ms_timeout)){
 		status = LFSC_SERR_BUSY;
-		int err = GetLastError();
-		printf("%d\n", err);
+		//int err = GetLastError();
+		//dprintf("%d\n", err);
+
 		goto error;
 	}
 
@@ -226,6 +250,7 @@ int lfsc_test(lfsc_ctx* ctx, wchar_t* out_str, int str_size)
 
 lfsc_status lfsc_ctx_fopen(lfsc_ctx* ctx, lfsc_file** out_file, const wchar_t* name)
 {
+	dprintf("%s\n", __func__);
 	lfsc_status ret = LFSC_SERR_UNKNOWN;
 	WaitForSingleObject(ctx->mutex, INFINITE);
 
@@ -264,8 +289,53 @@ error:
 	return ret;
 }
 
+size_t lfsc_read(void *ptr, size_t size, lfsc_file* stream)
+{
+	dprintf("%s %p %d %p\n", __func__, ptr, size, stream);
+	size_t ret = 0;
+
+	WaitForSingleObject(stream->ctx->mutex, INFINITE);
+
+	// write handle
+	LFSC_TRY( lfsc_write_command(stream->ctx->pipe, stream->handle, LFSC_CREAD), 0 );
+
+	// write size of read
+	uint32_t size32 = size;
+	dprintf("  requested size: %d\n", size32);
+	LFSC_TRY( lfsc_write_int(stream->ctx->pipe, &size32, sizeof(size32)), 0 ); 
+
+	// check status
+	lfsc_status s = lfsc_check_status(stream->ctx->pipe);
+	LFSC_TRY( s == LFSC_SOK, 0 );
+	
+	// read actual size of read
+	uint32_t recv_size = 0;
+	LFSC_TRY( lfsc_read_int(stream->ctx->pipe, &recv_size, sizeof(recv_size)), 0 );
+	dprintf("  actual size: %u\n", recv_size);
+
+	// read data
+	DWORD br = 0;
+	if(recv_size > 0){
+		dprintf("  readfile\n");
+		LFSC_TRY( ReadFile(stream->ctx->pipe, ptr, recv_size, &br, NULL) , 0 );
+		dprintf("  done\n");
+	}
+
+	ReleaseMutex(stream->ctx->mutex);
+
+	// return bytes read
+	dprintf("  received: %d bytes\n", br);
+	return br;
+
+error:
+	ReleaseMutex(stream->ctx->mutex);
+	dprintf("  error reading: %d\n", ret);
+	return ret;
+}
+
 size_t lfsc_fread(void *ptr, size_t size, size_t nmemb, lfsc_file* stream)
 {
+	dprintf("%s %p %d %d %p\n", __func__, ptr, size, nmemb, stream);
 	size_t ret = 0;
 	char buffer[size * nmemb]; // TODO not too sure about having this on the stack
 
@@ -312,8 +382,37 @@ error:
 	return ret;
 }
 
+size_t lfsc_write(const void *ptr, size_t size, lfsc_file* stream)
+{
+	dprintf("%s\n", __func__);
+	size_t ret = 0;
+
+	WaitForSingleObject(stream->ctx->mutex, INFINITE);
+
+	LFSC_TRY( lfsc_write_command(stream->ctx->pipe, stream->handle, LFSC_CWRITE), 0 );
+
+	uint32_t size32 = size;
+	LFSC_TRY( lfsc_write_int(stream->ctx->pipe, &size32, sizeof(size32)), 0 ); 
+
+	DWORD br;
+	LFSC_TRY( WriteFile(stream->ctx->pipe, ptr, size, &br, NULL), 0 );
+	
+	lfsc_status s = lfsc_check_status(stream->ctx->pipe);
+	LFSC_TRY( s == LFSC_SOK, 0 );
+
+	ReleaseMutex(stream->ctx->mutex);
+
+	// return number of members read
+	return br;
+
+error:
+	ReleaseMutex(stream->ctx->mutex);
+	return ret;
+}
+
 size_t lfsc_fwrite(const void *ptr, size_t size, size_t nmemb, lfsc_file* stream)
 {
+	dprintf("%s\n", __func__);
 	size_t ret = 0;
 	const char* buffer = ptr;
 
@@ -355,6 +454,7 @@ error:
 
 int lfsc_fseek(lfsc_file* stream, long offset, int whence)
 {
+	dprintf("%s\n", __func__);
 	WaitForSingleObject(stream->ctx->mutex, INFINITE);
 
 	int64_t out;
@@ -370,6 +470,7 @@ int lfsc_fseek(lfsc_file* stream, long offset, int whence)
 
 int lfsc_fflush(lfsc_file* stream)
 {
+	dprintf("%s\n", __func__);
 	int ret = 0;
 	WaitForSingleObject(stream->ctx->mutex, INFINITE);
 
@@ -383,6 +484,7 @@ error:
 
 int lfsc_fclose(lfsc_file* stream)
 {
+	dprintf("%s\n", __func__);
 	int ret;
 
 	WaitForSingleObject(stream->ctx->mutex, INFINITE);
@@ -401,6 +503,7 @@ error:
 
 size_t lfsc_get_length(lfsc_file* stream)
 {
+	dprintf("%s\n", __func__);
 	uint64_t ret;
 
 	WaitForSingleObject(stream->ctx->mutex, INFINITE);
@@ -418,6 +521,7 @@ error:
 
 lfsc_status lfsc_get_flags(lfsc_file* stream, int* out_flags)
 {
+	dprintf("%s\n", __func__);
 	lfsc_status ret = LFSC_SOK;
 
 	WaitForSingleObject(stream->ctx->mutex, INFINITE);

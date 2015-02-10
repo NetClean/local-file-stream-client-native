@@ -336,50 +336,13 @@ error:
 size_t lfsc_fread(void *ptr, size_t size, size_t nmemb, lfsc_file* stream)
 {
 	dprintf("%s %p %d %d %p\n", __func__, ptr, size, nmemb, stream);
-	size_t ret = 0;
-	char buffer[size * nmemb]; // TODO not too sure about having this on the stack
 
-	WaitForSingleObject(stream->ctx->mutex, INFINITE);
+	long read = lfsc_read(ptr, size * nmemb, stream);
 
-	LFSC_TRY( lfsc_write_command(stream->ctx->pipe, stream->handle, LFSC_CREAD), 0 );
-	//LFSC_TRY( lfsc_write_command(stream->ctx->pipe, stream->handle, LFSC_CREAD), 0 );
+	if(read != size * nmemb)
+		lfsc_fseek(stream, -(read - (read % nmemb)), SEEK_CUR);
 
-	uint32_t tot_size = size * nmemb;
-	LFSC_TRY( lfsc_write_int(stream->ctx->pipe, &tot_size, sizeof(tot_size)), 0 ); 
-
-	lfsc_status s = lfsc_check_status(stream->ctx->pipe);
-	LFSC_TRY( s == LFSC_SOK, 0 );
-	
-	uint32_t count = 0;
-	LFSC_TRY( lfsc_read_int(stream->ctx->pipe, &count, sizeof(count)), 0 );
-
-	int read = 0;
-	BOOL success = TRUE;
-
-	while(read < count && success){
-		DWORD br;
-		success = ReadFile(stream->ctx->pipe, buffer + read, count - read, &br, NULL);
-		read += br;
-	}
-
-	// copy the number of members read to output
-	memcpy(ptr, buffer, count / size * size);
-
-	// adjust stream position to nearest member position
-	if((read % size) != 0){
-		int64_t seek_out;
-		s = lfsc_local_seek(stream->ctx->pipe, stream->handle, -(read % size), LFSC_SEEK_CUR, &seek_out);
-		LFSC_TRY( s == LFSC_SOK, 0 );
-	}
-
-	ReleaseMutex(stream->ctx->mutex);
-
-	// return number of members read
-	return count / size;
-
-error:
-	ReleaseMutex(stream->ctx->mutex);
-	return ret;
+	return read / nmemb;
 }
 
 size_t lfsc_write(const void *ptr, size_t size, lfsc_file* stream)
@@ -412,44 +375,10 @@ error:
 
 size_t lfsc_fwrite(const void *ptr, size_t size, size_t nmemb, lfsc_file* stream)
 {
-	dprintf("%s\n", __func__);
-	size_t ret = 0;
-	const char* buffer = ptr;
-
-	WaitForSingleObject(stream->ctx->mutex, INFINITE);
-
-	LFSC_TRY( lfsc_write_command(stream->ctx->pipe, stream->handle, LFSC_CWRITE), 0 );
-
-	uint32_t tot_size = size * nmemb;
-	LFSC_TRY( lfsc_write_int(stream->ctx->pipe, &tot_size, sizeof(tot_size)), 0 ); 
-
-	int written = 0;
-	BOOL success = TRUE;
-
-	while(written < tot_size && success){
-		DWORD br;
-		success = WriteFile(stream->ctx->pipe, buffer + written, tot_size - written, &br, NULL);
-		written += br;
-	}
+	if(lfsc_write(ptr, size * nmemb, stream) == size * nmemb)
+		return nmemb;
 	
-	lfsc_status s = lfsc_check_status(stream->ctx->pipe);
-	LFSC_TRY( s == LFSC_SOK, 0 );
-
-	// adjust stream position to nearest member position
-	if((written % size) != 0){
-		int64_t seek_out;
-		s = lfsc_local_seek(stream->ctx->pipe, stream->handle, -(written % size), LFSC_SEEK_CUR, &seek_out);
-		LFSC_TRY( s == LFSC_SOK, 0 );
-	}
-
-	ReleaseMutex(stream->ctx->mutex);
-
-	// return number of members read
-	return written / size;
-
-error:
-	ReleaseMutex(stream->ctx->mutex);
-	return ret;
+	return 0;
 }
 
 int lfsc_fseek(lfsc_file* stream, long offset, int whence)

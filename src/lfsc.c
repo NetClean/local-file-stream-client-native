@@ -74,15 +74,6 @@ static bool lfsc_write_int(HANDLE pipe, const void* v, int size)
 {
 	dprintf("  %s\n", __func__);
 
-	if(size == 2)
-		dprintf("  %d %d %04x\n", size, *(int16_t*)v, *(int16_t*)v);
-
-	if(size == 4)
-		dprintf("  %d %d %08x\n", size, *(int32_t*)v, *(int32_t*)v);
-	
-	if(size == 8)
-		dprintf("  %d %" PRId64 " %" PRIx64 "\n", size, *(int64_t*)v, *(int64_t*)v);
-
 	BOOL success;
 	DWORD br;
 

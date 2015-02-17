@@ -2,23 +2,18 @@
 sourcedir           src
 cflags              std=c99 Wall Iinclude ggdb
 ldflags             Wl,--export-all-symbols
+targettype          lib-static
 
-[-32bit: common]
+[32bit-static: common]
 name                lfsc-32
 target_platform     mingw32
 
-[-64bit: common]
+[64bit-static: common]
 target_platform     mingw64
 name                lfsc-64
 
-[*32bit-static: 32bit]
-targettype          lib-static
+[32bit-dll: 32bit-static]
+*targettype          lib-shared
 
-[64bit-static: 64bit]
-targettype          lib-static
-
-[32bit-dll: 32bit]
-targettype          lib-shared
-
-[64bit-dll: 64bit]
-targettype          lib-shared
+[64bit-dll: 64bit-static]
+*targettype          lib-shared

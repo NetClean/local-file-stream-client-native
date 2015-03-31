@@ -148,6 +148,8 @@ static lfsc_status lfsc_local_seek(HANDLE pipe, uint64_t handle, int64_t offset,
 
 	LFSC_TRY( lfsc_read_int(pipe, out, sizeof(int64_t)), LFSC_SERR_READ_PIPE );
 
+	return LFSC_SOK;
+
 error:
 	return ret;
 }
@@ -164,11 +166,7 @@ lfsc_ctx* lfsc_ctx_create()
 void lfsc_ctx_destroy(lfsc_ctx* ctx)
 {
 	dprintf("%s\n", __func__);
-	if(ctx->pipe != INVALID_HANDLE_VALUE)
-		CloseHandle(ctx->pipe);
-
-	CloseHandle(ctx->mutex);
-
+	lfsc_ctx_disconnect(ctx);
 	free(ctx);
 }
 
@@ -206,6 +204,8 @@ lfsc_status lfsc_ctx_disconnect(lfsc_ctx* ctx)
 {
 	if(ctx->pipe != INVALID_HANDLE_VALUE)
 		CloseHandle(ctx->pipe);
+	
+	ctx->pipe = INVALID_HANDLE_VALUE;
 
 	return LFSC_SOK;
 }

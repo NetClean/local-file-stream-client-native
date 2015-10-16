@@ -177,23 +177,28 @@ lfsc_status lfsc_ctx_connect(lfsc_ctx* ctx, const wchar_t* name, int ms_timeout)
 
 	WaitForSingleObject(ctx->mutex, INFINITE);
 
-	if(!WaitNamedPipeW(name, ms_timeout)){
-		status = LFSC_SERR_BUSY;
-		//int err = GetLastError();
-		//dprintf("%d\n", err);
+	int timeout = ms_timeout;
 
-		goto error;
-	}
+	do{
+		ctx->pipe = CreateFileW(name, GENERIC_READ | GENERIC_WRITE | FILE_SHARE_READ | FILE_SHARE_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
-	ctx->pipe = CreateFileW(name, GENERIC_READ | GENERIC_WRITE | FILE_SHARE_READ | FILE_SHARE_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		if(ctx->pipe != INVALID_HANDLE_VALUE){
+			ReleaseMutex(ctx->mutex);
+			return LFSC_SOK; 
+		}
 
-	if(ctx->pipe == INVALID_HANDLE_VALUE){
-		status = LFSC_SERR_OPEN_PIPE;
-		goto error;
-	}
+		else if(GetLastError() == ERROR_PIPE_BUSY){
+			status = LFSC_SERR_OPEN_PIPE;
+			goto error;
+		}
 
-	ReleaseMutex(ctx->mutex);
-	return LFSC_SOK; 
+		timeout -= 10;
+		Sleep(10);
+
+	} while(timeout >= 0 || ms_timeout == LFSC_WAIT_FOREVER);
+
+	status = LFSC_SERR_BUSY;
+	goto error;
 
 error:
 	ReleaseMutex(ctx->mutex);
@@ -333,7 +338,7 @@ size_t lfsc_fread(void *ptr, size_t size, size_t nmemb, lfsc_file* stream)
 	if(read != size * nmemb)
 		lfsc_fseek(stream, -(read - (read % nmemb)), SEEK_CUR);
 
-	return read / nmemb;
+	return read / size;
 }
 
 size_t lfsc_write(const void *ptr, size_t size, lfsc_file* stream)

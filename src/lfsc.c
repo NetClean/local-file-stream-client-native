@@ -377,7 +377,7 @@ size_t lfsc_fwrite(const void *ptr, size_t size, size_t nmemb, lfsc_file* stream
 	return 0;
 }
 
-int lfsc_fseek(lfsc_file* stream, long offset, int whence)
+int64_t lfsc_fseek(lfsc_file* stream, int64_t offset, int whence)
 {
 	dprintf("%s\n", __func__);
 	WaitForSingleObject(stream->ctx->mutex, INFINITE);
@@ -426,7 +426,7 @@ error:
 	return ret;
 }
 
-size_t lfsc_get_length(lfsc_file* stream)
+uint64_t lfsc_get_length(lfsc_file* stream)
 {
 	dprintf("%s\n", __func__);
 	uint64_t ret;

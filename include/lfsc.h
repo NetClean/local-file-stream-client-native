@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include <wchar.h>
+#include <stdint.h>
 
 #define LFSC_WAIT_FOREVER -1
 
@@ -49,13 +50,13 @@ size_t lfsc_write(const void *ptr, size_t size, lfsc_file* stream);
 size_t lfsc_fread(void *ptr, size_t size, size_t nmemb, lfsc_file* stream);
 size_t lfsc_fwrite(const void *ptr, size_t size, size_t nmemb, lfsc_file* stream);
 
-int lfsc_fseek(lfsc_file* stream, long offset, int whence);
+int64_t lfsc_fseek(lfsc_file* stream, int64_t offset, int whence);
 int lfsc_fflush(lfsc_file* stream);
 int lfsc_fclose(lfsc_file* stream); 
 
 int lfsc_test(lfsc_ctx* ctx, wchar_t* out_str, int str_size);
 
-size_t lfsc_get_length(lfsc_file* stream);
+uint64_t lfsc_get_length(lfsc_file* stream);
 lfsc_status lfsc_get_flags(lfsc_file* stream, int* out_flags);
 
 #ifdef __cplusplus
